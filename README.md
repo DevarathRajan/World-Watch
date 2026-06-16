@@ -58,7 +58,7 @@ Runs on `http://localhost:9766`.
 ## Project structure
 
 ```
-WorldMonitor/
+World Watch/
 ├── server.py        ← FastAPI backend + static serving
 ├── main.js          ← Electron entry point
 ├── package.json
@@ -67,7 +67,7 @@ WorldMonitor/
     ├── index.html   ← Structure
     ├── style.css    ← All styling
     ├── world.js     ← All component logic
-    └── support.js   ← dc-runtime (see note below)
+    └── support.js   ← dc-runtime
 ```
 
 > **Note:** `support.js` is the dc-runtime — a React-based component system. If It is not included in this repo due to size. You can obtain it from the [dc-runtime project](https://github.com/anthropics/dc-runtime)
