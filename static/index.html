@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Monitor</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- React (required by support.js runtime) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- D3 + TopoJSON for the world map -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+
+  <!-- Runtime & styles -->
+  <script src="/assets/support.js"></script>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<!-- ============================================================
+     The x-dc tag is the entry point for the support.js runtime.
+     It picks up the component class from the <script type="text/x-dc">
+     block below and renders everything inside here.
+     ============================================================ -->
+<x-dc>
+
+  <!-- Fonts + styles needed inside the runtime's render pass -->
+  <helmet>
+    <style>
+      /* Spinner used inside map loading state — scoped here so the runtime
+         can render it before full page CSS is guaranteed to be applied */
+      .wm-spinner-sm {
+        width: 28px; height: 28px;
+        border: 2px solid rgba(74,200,255,.18);
+        border-top-color: #45d6ff;
+        border-radius: 50%;
+        animation: wm-sweep 1s linear infinite;
+      }
+    </style>
+  </helmet>
+
+  <!-- ── Root wrapper ──────────────────────────────────────── -->
+  <div class="wm-root">
+
+    <!-- HEADER -->
+    <header class="wm-header">
+
+      <div class="wm-header-brand">
+        <span class="wm-status-dot"></span>
+        <span class="wm-brand-name">JARVIS</span>
+        <span class="wm-brand-sub">// WORLD MONITOR</span>
+      </div>
+
+      <span class="wm-version">v2.6.0</span>
+
+      <span class="wm-live-badge">
+        <span class="wm-live-dot"></span>LIVE
+      </span>
+
+      <select value="{{ activeRegion }}" onChange="{{ onRegion }}" class="wm-region-select">
+        <sc-for list="{{ regionOptions }}" as="opt" hint-placeholder-count="3">
+          <option value="{{ opt }}">{{ opt }}</option>
+        </sc-for>
+      </select>
+
+      <div class="wm-header-right">
+        <span class="wm-stat">
+          THREATS <span class="wm-stat-val-alert">{{ alertsCount }}</span>
+        </span>
+        <span class="wm-stat">
+          TRACKED <span class="wm-stat-val-info">{{ eventsCount }}</span>
+        </span>
+        <button onClick="{{ toggleMute }}" class="wm-btn-mute">{{ muteIcon }}</button>
+        <div onClick="{{ closeMonitor }}" class="wm-btn-close">✕ CLOSE</div>
+      </div>
+
+    </header>
+
+    <!-- BODY -->
+    <div class="wm-body">
+
+      <!-- ── MAP PANEL ──────────────────────────────────────── -->
+      <section class="wm-map-panel">
+
+        <div class="wm-map-header">
+          <span class="wm-map-title">⊕ GLOBAL SITUATION</span>
+          <span class="wm-clock">{{ dateStr }} · {{ clock }} UTC</span>
+        </div>
+
+        <div class="wm-map-body">
+          <div ref="{{ mapRef }}" class="wm-map-ref"></div>
+          <div class="wm-scanlines"></div>
+          <div class="wm-scan-line"></div>
+
+          <!-- Time range tabs -->
+          <div class="wm-range-tabs">
+            <sc-for list="{{ rangeTabs }}" as="r" hint-placeholder-count="6">
+              <button onClick="{{ r.onClick }}"
+                class="wm-range-btn"
+                style="background:{{ r.bg }};color:{{ r.fg }}">{{ r.id }}</button>
+            </sc-for>
+          </div>
+
+          <!-- Zoom controls -->
+          <div class="wm-zoom-controls">
+            <button onClick="{{ zoomIn }}"    class="wm-zoom-btn">+</button>
+            <button onClick="{{ zoomOut }}"   class="wm-zoom-btn">−</button>
+            <button onClick="{{ zoomReset }}" class="wm-zoom-btn reset">⌂</button>
+          </div>
+
+          <!-- Layer toggle panel -->
+          <div class="wm-layers">
+            <div class="wm-layers-header">
+              <span>LAYERS</span>
+              <span class="wm-layers-count">{{ activeLayerCount }}/{{ layerTotal }}</span>
+            </div>
+            <div class="wm-layers-list">
+              <sc-for list="{{ layerList }}" as="ly" hint-placeholder-count="10">
+                <div onClick="{{ ly.onToggle }}"
+                  class="wm-layer-row"
+                  style="color:{{ ly.labelColor }}">
+                  <span class="wm-layer-checkbox"
+                    style="border-color:{{ ly.boxBd }};background:{{ ly.boxBg }}">{{ ly.check }}</span>
+                  <span class="wm-layer-dot" style="background:{{ ly.color }}"></span>
+                  <span class="wm-layer-label">{{ ly.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Legend bar -->
+          <div class="wm-legend">
+            <span class="wm-legend-title">LEGEND</span>
+            <sc-for list="{{ legendItems }}" as="lg" hint-placeholder-count="6">
+              <span class="wm-legend-item">
+                <span class="wm-legend-dot"
+                  style="border-radius:{{ lg.radius }};background:{{ lg.color }};box-shadow:0 0 6px {{ lg.color }}"></span>
+                {{ lg.label }}
+              </span>
+            </sc-for>
+          </div>
+
+          <div class="wm-crs-badge">VECTOR · WGS84</div>
+
+          <!-- Loading state -->
+          <sc-if value="{{ mapLoading }}" hint-placeholder-val="{{ true }}">
+            <div class="wm-map-loading">
+              <div class="wm-spinner"></div>
+              <span class="wm-map-loading-text">INITIALIZING SITUATION GRID…</span>
+            </div>
+          </sc-if>
+
+          <!-- Error state -->
+          <sc-if value="{{ mapError }}" hint-placeholder-val="{{ true }}">
+            <div class="wm-map-error">⚠ MAP DATA UNAVAILABLE — RETRYING</div>
+          </sc-if>
+
+          <!-- Selected event popup -->
+          <sc-if value="{{ hasSelected }}" hint-placeholder-val="{{ false }}">
+            <div class="wm-event-popup"
+              style="border:1px solid {{ sel.color }};box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 22px {{ sel.glow }}">
+              <div class="wm-event-popup-header" style="background:{{ sel.glow }}">
+                <span class="wm-event-popup-dot"
+                  style="background:{{ sel.color }};box-shadow:0 0 8px {{ sel.color }}"></span>
+                <span class="wm-event-popup-name">{{ sel.name }}</span>
+                <span class="wm-event-popup-badge" style="background:{{ sel.color }}">{{ sel.catLabel }}</span>
+                <span onClick="{{ closeEvent }}" class="wm-event-popup-close">✕</span>
+              </div>
+              <div class="wm-event-popup-body">
+                <div class="wm-event-headline">{{ sel.headline }}</div>
+                <div class="wm-event-meta">
+                  <span>{{ sel.region }}</span>
+                  <span>{{ sel.coords }}</span>
+                  <span>{{ sel.rel }} AGO</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </section>
+
+      <!-- ── RIGHT RAIL ─────────────────────────────────────── -->
+      <div class="wm-rail">
+
+        <!-- LIVE NEWS -->
+        <section class="wm-panel wm-news-panel" style="grid-column:{{ newsSpan }}">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">⊟ LIVE NEWS</span>
+            <span class="wm-panel-badge wm-panel-badge-live">
+              <span class="wm-live-dot"></span>LIVE
+            </span>
+            <button onClick="{{ toggleNewsSize }}"
+              class="wm-size-btn" style="margin-left:auto" title="Expand / shrink">{{ newsSizeIcon }}</button>
+          </div>
+
+          <div class="wm-tab-bar">
+            <sc-for list="{{ sourceTabs }}" as="s" hint-placeholder-count="6">
+              <button onClick="{{ s.onClick }}"
+                class="wm-tab-btn"
+                style="border-color:{{ s.bd }};background:{{ s.bg }};color:{{ s.fg }}">{{ s.id }}</button>
+            </sc-for>
+          </div>
+
+          <div class="wm-news-list" style="max-height:{{ newsMaxH }}">
+            <sc-for list="{{ newsList }}" as="n" hint-placeholder-count="6">
+              <div class="wm-news-row" style="background:{{ n.rowBg }}"
+                onclick="window.open('{{ n.link }}','_blank')">
+                <span class="wm-news-bar"
+                  style="background:{{ n.catColor }};box-shadow:0 0 6px {{ n.catColor }}"></span>
+                <div class="wm-news-content">
+                  <div class="wm-news-meta">
+                    <span style="color:{{ n.catColor }};font-weight:700">{{ n.source }}</span>
+                    <span class="wm-news-time">{{ n.rel }}</span>
+                  </div>
+                  <div class="wm-news-head">{{ n.head }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- AI STRATEGIC POSTURE -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">◈ AI STRATEGIC POSTURE</span>
+            <span class="wm-panel-badge wm-panel-badge-new" style="margin-left:auto">{{ postureCount }} NEW</span>
+          </div>
+          <div class="wm-posture-body">
+            <sc-for list="{{ postureList }}" as="p" hint-placeholder-count="3">
+              <div class="wm-posture-card" style="border-left-color:{{ p.color }}">
+                <div class="wm-posture-card-header">
+                  <span class="wm-posture-region">{{ p.region }}</span>
+                  <span class="wm-posture-level" style="background:{{ p.color }}">{{ p.level }}</span>
+                </div>
+                <div class="wm-posture-assets">
+                  <span>📰 NEWS <b>{{ p.mentions }}</b></span>
+                  <span>⚔ CONF <b>{{ p.conflict }}</b></span>
+                  <span>◭ SEIS <b>{{ p.seismic }}</b></span>
+                </div>
+                <div class="wm-posture-note">{{ p.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- STRATEGIC RISK OVERVIEW -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">◎ STRATEGIC RISK OVERVIEW</span>
+            <span class="wm-panel-badge wm-panel-badge-live" style="margin-left:auto">
+              <span class="wm-live-dot"></span>LIVE
+            </span>
+          </div>
+          <div class="wm-risk-body">
+            <div class="wm-risk-gauge">
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" fill="none"
+                  stroke="rgba(74,200,255,.1)" stroke-width="10"></circle>
+                <circle cx="60" cy="60" r="52" fill="none"
+                  stroke="{{ riskColor }}" stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="{{ riskCirc }}" stroke-dashoffset="{{ riskDashOffset }}"
+                  transform="rotate(-90 60 60)"
+                  style="transition:stroke-dashoffset .9s ease,stroke .5s;filter:drop-shadow(0 0 5px {{ riskColor }})">
+                </circle>
+              </svg>
+              <div class="wm-risk-gauge-inner">
+                <span class="wm-risk-number" style="color:{{ riskColor }};text-shadow:0 0 14px {{ riskColor }}">{{ risk }}</span>
+                <span class="wm-risk-label">{{ riskLevel }}</span>
+              </div>
+            </div>
+            <div class="wm-risk-info">
+              <div class="wm-risk-trend-label">TREND</div>
+              <div class="wm-risk-trend-val" style="color:{{ riskTrendColor }}">
+                {{ riskTrendIcon }} {{ riskTrend }}
+              </div>
+              <div class="wm-risk-divider"></div>
+              <div class="wm-risk-stat">
+                <span>ACTIVE THEATRES</span><b>{{ alertsCount }}</b>
+              </div>
+              <div class="wm-risk-stat">
+                <span>WINDOW</span><b>{{ activeRange }}</b>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- AI INSIGHTS -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">✦ AI INSIGHTS</span>
+            <span style="margin-left:auto;font-size:9px;color:#456">CONF {{ aiConfidence }}%</span>
+          </div>
+          <div class="wm-insights-body">
+            <div class="wm-radar-graphic">
+              <svg width="88" height="88" viewBox="0 0 88 88">
+                <circle cx="44" cy="44" r="40" fill="none" stroke="rgba(74,200,255,.12)"></circle>
+                <circle cx="44" cy="44" r="27" fill="none" stroke="rgba(74,200,255,.1)"></circle>
+                <circle cx="44" cy="44" r="14" fill="none" stroke="rgba(74,200,255,.1)"></circle>
+                <line x1="4" y1="44" x2="84" y2="44" stroke="rgba(74,200,255,.08)"></line>
+                <line x1="44" y1="4" x2="44" y2="84" stroke="rgba(74,200,255,.08)"></line>
+                <g class="wm-radar-sweep">
+                  <path d="M44 44 L44 4 A40 40 0 0 1 78 24 Z" fill="rgba(69,214,255,.18)"></path>
+                </g>
+                <circle cx="62" cy="30" r="2.5" fill="#ff4658"></circle>
+                <circle cx="32" cy="58" r="2"   fill="#ff9e3d"></circle>
+                <circle cx="56" cy="60" r="1.8" fill="#ffe14d"></circle>
+              </svg>
+            </div>
+            <div class="wm-insights-info">
+              <div class="wm-assessment">{{ assessment }}</div>
+              <div class="wm-ai-metrics">
+                <sc-for list="{{ aiMetrics }}" as="m" hint-placeholder-count="3">
+                  <div>
+                    <div class="wm-ai-metric-label">{{ m.label }}</div>
+                    <div class="wm-ai-metric-val" style="color:{{ m.color }}">{{ m.val }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- LIVE WEBCAMS -->
+        <section class="wm-panel wm-webcam-panel" style="grid-column:{{ webcamSpan }}">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">▦ LIVE WEBCAMS</span>
+            <div class="wm-webcam-header-tabs">
+              <sc-for list="{{ webTabs }}" as="w" hint-placeholder-count="6">
+                <button onClick="{{ w.onClick }}"
+                  class="wm-tab-btn sm"
+                  style="border-color:{{ w.bd }};background:{{ w.bg }};color:{{ w.fg }}">{{ w.id }}</button>
+              </sc-for>
+              <button onClick="{{ toggleWebcamSize }}"
+                class="wm-size-btn" title="Expand / shrink">{{ webcamSizeIcon }}</button>
+            </div>
+          </div>
+          <div class="wm-webcam-grid {{ webcamBig }}">
+            <sc-for list="{{ webcamTiles }}" as="c" hint-placeholder-count="6">
+              <div class="wm-cam-tile"
+                style="border:1px solid {{ c.bd }}"
+                onclick="{{ c.onClick }}">
+
+                <sc-if value="{{ c.loaded }}" hint-placeholder-val="{{ false }}">
+                  <iframe class="wm-cam-iframe"
+                    src="{{ c.iframeSrc }}"
+                    allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                    allowfullscreen></iframe>
+                </sc-if>
+
+                <sc-if value="{{ c.notLoaded }}" hint-placeholder-val="{{ true }}">
+                  <div class="wm-cam-tile-bg" style="background:{{ c.bg }}"></div>
+                  <div class="wm-cam-scanlines"></div>
+                  <sc-if value="{{ c.live }}" hint-placeholder-val="{{ false }}">
+                    <div class="wm-cam-scan-anim"></div>
+                  </sc-if>
+                  <img class="wm-cam-thumb" src="{{ c.thumb }}"
+                    onerror="this.style.display='none'" />
+                  <div class="wm-cam-play">▶</div>
+                </sc-if>
+
+                <div class="wm-cam-status-badge" style="color:{{ c.statusColor }}">
+                  <span class="wm-cam-status-dot" style="background:{{ c.statusColor }}"></span>
+                  {{ c.status }}
+                </div>
+                <div class="wm-cam-info">
+                  <div class="wm-cam-city">{{ c.city }}</div>
+                  <div class="wm-cam-note">{{ c.note }}</div>
+                </div>
+
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- LIVE BROADCAST -->
+        <section class="wm-panel" style="grid-column:{{ bcastSpan }}">
+          <div class="wm-panel-header wm-broadcast-header">
+            <span class="wm-panel-title">📡 LIVE BROADCAST</span>
+            <span class="wm-panel-badge wm-panel-badge-live">
+              <span class="wm-live-dot"></span>ON AIR
+            </span>
+            <button onClick="{{ toggleBcastSize }}"
+              class="wm-size-btn" style="margin-left:auto" title="Expand / shrink">{{ bcastSizeIcon }}</button>
+          </div>
+          <div class="wm-tab-bar wm-broadcast-tabs">
+            <sc-for list="{{ channelTabs }}" as="ch" hint-placeholder-count="10">
+              <button onClick="{{ ch.onClick }}"
+                class="wm-tab-btn sm"
+                style="border-color:{{ ch.bd }};background:{{ ch.bg }};color:{{ ch.fg }}">{{ ch.label }}</button>
+            </sc-for>
+          </div>
+          <div class="wm-broadcast-player">
+            <sc-if value="{{ hasChannel }}" hint-placeholder-val="{{ false }}">
+              <iframe class="wm-broadcast-iframe"
+                src="{{ channelSrc }}"
+                allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                allowfullscreen></iframe>
+            </sc-if>
+            <sc-if value="{{ noChannel }}" hint-placeholder-val="{{ true }}">
+              <div class="wm-broadcast-placeholder">
+                <div class="wm-broadcast-placeholder-icon">📡</div>
+                <div>Select a channel to watch live</div>
+              </div>
+            </sc-if>
+          </div>
+        </section>
+
+        <!-- INFRASTRUCTURE CASCADE -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">⟁ INFRASTRUCTURE CASCADE</span>
+            <span style="margin-left:auto;font-size:9px;color:#456">{{ infraLinks }} LINKS</span>
+          </div>
+          <div class="wm-infra-stats">
+            <sc-for list="{{ infraStats }}" as="st" hint-placeholder-count="4">
+              <div class="wm-infra-stat-card">
+                <div class="wm-infra-stat-val" style="color:{{ st.color }}">{{ st.val }}</div>
+                <div class="wm-infra-stat-label">{{ st.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div class="wm-tab-bar wm-infra-tabs">
+            <sc-for list="{{ infraTabs }}" as="it" hint-placeholder-count="4">
+              <button onClick="{{ it.onClick }}"
+                class="wm-tab-btn sm"
+                style="border-color:{{ it.bd }};background:{{ it.bg }};color:{{ it.fg }}">{{ it.id }}</button>
+            </sc-for>
+          </div>
+          <div class="wm-infra-list">
+            <sc-for list="{{ infraList }}" as="f" hint-placeholder-count="5">
+              <div class="wm-infra-row">
+                <div class="wm-infra-row-info">
+                  <div class="wm-infra-row-name">{{ f.name }}</div>
+                  <div class="wm-infra-row-sub">{{ f.sub }}</div>
+                </div>
+                <div class="wm-infra-bar-wrap">
+                  <div class="wm-infra-bar-fill"
+                    style="width:{{ f.load }};background:{{ f.statusColor }}"></div>
+                </div>
+                <span class="wm-infra-status" style="color:{{ f.statusColor }}">{{ f.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- LIVE INTELLIGENCE -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">⊡ LIVE INTELLIGENCE</span>
+          </div>
+          <div class="wm-tab-bar">
+            <sc-for list="{{ intelTabs }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.onClick }}"
+                class="wm-tab-btn sm"
+                style="border-color:{{ t.bd }};background:{{ t.bg }};color:{{ t.fg }}">{{ t.id }}</button>
+            </sc-for>
+          </div>
+          <div class="wm-intel-list">
+            <sc-for list="{{ intelList }}" as="i" hint-placeholder-count="5">
+              <div class="wm-intel-row" style="background:{{ i.rowBg }}">
+                <span class="wm-intel-dot"
+                  style="background:{{ i.sevColor }};box-shadow:0 0 6px {{ i.sevColor }}"></span>
+                <div class="wm-intel-content">
+                  <div class="wm-intel-text">{{ i.text }}</div>
+                  <div class="wm-intel-meta">{{ i.channel }} · {{ i.rel }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- MARKET RADAR -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">◈ MARKET RADAR</span>
+            <span class="wm-panel-badge wm-panel-badge-live-green" style="margin-left:auto">
+              <span style="width:6px;height:6px;border-radius:50%;background:#3ee08f;animation:wm-blink 2s infinite"></span>
+              LIVE
+            </span>
+          </div>
+          <div class="wm-markets-grid" id="jv-market-grid">
+            <div style="font-size:9px;color:#5c7686;padding:8px;letter-spacing:.1em">
+              Loading markets...
+            </div>
+          </div>
+        </section>
+
+        <!-- SEISMIC ACTIVITY -->
+        <section class="wm-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">◭ SEISMIC ACTIVITY</span>
+            <span id="jv-quake-count" style="margin-left:auto;font-size:9px;color:#5c7686"></span>
+          </div>
+          <div class="wm-quake-list" id="jv-quake-list">
+            <div style="font-size:9px;color:#5c7686;padding:8px 0;letter-spacing:.1em">
+              Loading USGS data...
+            </div>
+          </div>
+        </section>
+
+        <!-- FLIGHT RADAR -->
+        <section class="wm-panel wm-flight-panel">
+          <div class="wm-panel-header wm-flight-header">
+            <span class="wm-panel-title">✈ FLIGHT RADAR</span>
+            <span class="wm-panel-badge wm-panel-badge-live-green">
+              <span style="width:6px;height:6px;border-radius:50%;background:#3ee08f;animation:wm-blink 2s infinite"></span>
+              LIVE
+            </span>
+            <span id="jv-flight-region"  class="wm-flight-region-badge">DETECTING...</span>
+            <span id="jv-flight-count"   class="wm-flight-stat"></span>
+            <span id="jv-flight-highest" class="wm-flight-stat"></span>
+            <span id="jv-flight-fastest" class="wm-flight-stat"></span>
+            <button id="jv-flight-expand-btn"
+              onclick="jvFlightToggleExpand()"
+              class="wm-size-btn" style="margin-left:auto" title="Expand 25%">⤢</button>
+          </div>
+
+          <div id="jv-flight-regions" class="wm-flight-region-bar"></div>
+
+          <div id="jv-flight-body" class="wm-flight-body">
+
+            <!-- Map side -->
+            <div id="jv-flight-map-wrap" class="wm-flight-map-wrap">
+
+              <svg id="jv-flight-svg" class="wm-flight-svg"></svg>
+
+              <div class="wm-flight-map-zoom">
+                <button onclick="jvFlightZoom(1.4)"    class="wm-flight-zoom-btn">+</button>
+                <button onclick="jvFlightZoom(1/1.4)"  class="wm-flight-zoom-btn">−</button>
+                <button onclick="jvFlightZoomReset()"  class="wm-flight-zoom-btn" style="font-size:12px">⌂</button>
+              </div>
+
+              <div id="jv-flight-loading" class="wm-flight-loading">
+                <div class="wm-spinner-sm"></div>
+                <span class="wm-flight-loading-text">LOCATING AIRSPACE...</span>
+              </div>
+
+              <!-- Flight detail card -->
+              <div id="jv-flight-card" class="wm-flight-card">
+                <div id="jv-fc-callsign" class="wm-flight-card-callsign"></div>
+                <div id="jv-fc-origin"   class="wm-flight-card-origin"></div>
+                <div id="jv-fc-alt"      class="wm-flight-card-field"></div>
+                <div id="jv-fc-spd"      class="wm-flight-card-field"></div>
+                <div id="jv-fc-hdg"      class="wm-flight-card-field"></div>
+                <div id="jv-fc-status"   style="margin-top:5px;font-weight:700"></div>
+                <div class="wm-flight-card-close"
+                  onclick="event.stopPropagation(); JV_FLIGHT.selected=null; jvFlightHideCard(); jvFlightUpdateIcons();">
+                  ✕ CLOSE
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Table side -->
+            <div class="wm-flight-table-wrap">
+              <div class="wm-flight-table-header">
+                <span>CALLSIGN</span>
+                <span>ALT ft</span>
+                <span>km/h</span>
+              </div>
+              <div id="jv-flight-table" class="wm-flight-table-body">
+                <div style="padding:12px 8px;font-size:9px;color:#3a5a6a;letter-spacing:.1em">
+                  Loading flights...
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- REGIONAL FEEDS -->
+        <section class="wm-panel wm-regions-panel">
+          <div class="wm-panel-header">
+            <span class="wm-panel-title">⊞ REGIONAL FEEDS</span>
+            <span class="wm-panel-badge wm-panel-badge-live-green" style="margin-left:auto">
+              <span style="width:6px;height:6px;border-radius:50%;background:#3ee08f;animation:wm-blink 2s infinite"></span>
+              ALL CHANNELS LIVE
+            </span>
+          </div>
+          <div class="wm-regions-grid">
+            <sc-for list="{{ regionCols }}" as="rg" hint-placeholder-count="8">
+              <div class="wm-region-col">
+                <div class="wm-region-col-header">
+                  <span class="wm-region-col-title">{{ rg.name }}</span>
+                  <span class="wm-region-live-badge">LIVE</span>
+                </div>
+                <div class="wm-region-col-items">
+                  <sc-for list="{{ rg.items }}" as="it" hint-placeholder-count="3">
+                    <div class="wm-region-item"
+                      onclick="window.open('{{ it.link }}','_blank')">
+                      <div class="wm-region-item-meta">
+                        <span class="wm-region-item-src">{{ it.src }}</span>
+                        <span class="wm-region-item-time">{{ it.rel }}</span>
+                      </div>
+                      <div class="wm-region-item-head">{{ it.head }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+      </div><!-- end .wm-rail -->
+
+    </div><!-- end .wm-body -->
+
+  </div><!-- end .wm-root -->
+
+</x-dc>
+
+<!-- Load component logic as a regular script first, before the runtime boots -->
+<script ></script>
+
+<!-- dc-script block — runtime evaluates this to find the Component class.
+     world.js must be loaded before this executes which it is since scripts
+     run in order and the runtime only boots on DOMContentLoaded. -->
+<script type="text/x-dc" data-dc-script id="wm-component-script"></script>
+
+</body>
+</html>
