@@ -62,6 +62,7 @@ function closeMonitor() {
 // overwrites these with fresh IDs via /world/v1/streams.
 
 const JV_CHANNELS = [
+  { id: "bloomberg", label: "BLOOMBERG",  vid: "QB5BNdBFujE" },
   { id: "aljazeera", label: "AL JAZEERA", vid: "coYw-eVU0Ks" },
   { id: "dw",        label: "DW",         vid: "84o3MwdMoww" },
   { id: "france24",  label: "FRANCE 24",  vid: "l8PMl7tUDIE" },
@@ -71,6 +72,7 @@ const JV_CHANNELS = [
   { id: "ndtv",      label: "NDTV",       vid: "g3Hs4nHQFVc" },
   { id: "times_now", label: "TIMES NOW",  vid: "f1dL6DPMDNQ" },
   { id: "republic",  label: "REPUBLIC",   vid: "5ONe0acRwMc" },
+  { id: "asianet",   label: "ASIANET",    vid: "s0LLVQeMmtU" },
   { id: "arabiya",   label: "AL ARABIYA", vid: "bERI0pAHRBI" },
 ];
 
@@ -1111,7 +1113,7 @@ class Component extends DCLogic {
       activeInfra:   "CABLES",
       activeRegion:  "GLOBAL",
       selectedEvent: null,
-      activeChannel: null,
+      activeChannel: "bloomberg",   // Bloomberg auto-plays (muted) on load
       newsBig:       false,
       webcamBig:     false,
       bcastBig:      false,
@@ -1535,14 +1537,24 @@ class Component extends DCLogic {
       { label: "SOURCES",    val: this._aiSources != null ? this._aiSources : 0, color: "#45d6ff" },
     ];
 
-    // Live broadcast channels
+    // Live broadcast channels. Clicking a tab counts as a user gesture, which
+    // lets the selected stream autoplay *with sound*. The initial Bloomberg
+    // load has no gesture, so it autoplays muted (browser autoplay policy).
     const channelTabs = JV_CHANNELS.map(ch => {
       const on = ch.id === s.activeChannel;
-      return { label: ch.label, onClick: () => this.setState({ activeChannel: ch.id }), bg: on ? "#ff4658" : "transparent", fg: on ? "#fff" : "#6f93a5", bd: on ? "#ff4658" : "rgba(74,200,255,.18)" };
+      return {
+        label: ch.label,
+        onClick: () => { this._bcastInteracted = true; this.setState({ activeChannel: ch.id }); },
+        bg: on ? "#ff4658" : "transparent", fg: on ? "#fff" : "#6f93a5", bd: on ? "#ff4658" : "rgba(74,200,255,.18)",
+      };
     });
     const activeChObj  = JV_CHANNELS.find(c => c.id === s.activeChannel);
     const channelVid   = activeChObj ? (jvStreamIds[activeChObj.id] || activeChObj.vid) : null;
-    const channelSrc   = channelVid ? `https://www.youtube-nocookie.com/embed/${channelVid}?autoplay=0&rel=0&modestbranding=1` : "";
+    const autoMuted    = !this._bcastInteracted && s.activeChannel === "bloomberg";
+    const chMute       = autoMuted ? 1 : 0;
+    const channelSrc   = channelVid
+      ? `https://www.youtube-nocookie.com/embed/${channelVid}?autoplay=1&mute=${chMute}&rel=0&modestbranding=1&playsinline=1`
+      : "";
 
     // Panel expand toggles
     const newsSpan      = "1/-1";
