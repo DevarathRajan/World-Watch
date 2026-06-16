@@ -66,6 +66,7 @@ CYBER_FEEDS = {
 
 # YouTube channel handles for live stream -> live api token id changes are not handled in js code
 BROADCAST_CHANNELS = {
+    "bloomberg": "markets",          # Bloomberg TV 24/7 live
     "aljazeera": "aljazeeraenglish",
     "dw":        "dwnews",
     "france24":  "france24english",
@@ -75,6 +76,7 @@ BROADCAST_CHANNELS = {
     "ndtv":      "ndtv",
     "times_now": "timesnownews",
     "republic":  "republictv",
+    "asianet":   "asianetnews",      # Asianet News (Malayalam) live
     "arabiya":   "alarabiya",
 }
 

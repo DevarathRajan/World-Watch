@@ -11,7 +11,7 @@ A standalone real-time global intelligence dashboard. Built as a fully independe
 Displays live global data across a single full-screen dashboard:
 
 - **World map** with conflict zones, military activity, nuclear sites, and more — toggle layers, zoom, click events
-- **Live news** from BBC, Reuters, Al Jazeera, DW, France24, Bloomberg
+- **Live news** from BBC, Reuters, Al Jazeera, DW, France24, Bloomberg, Asianet News
 - **Flight radar** powered by OpenSky Network — location-aware, switchable by region
 - **Market data** — BTC, ETH, USD/AED, USD/INR, EUR, GBP via CoinGecko and Frankfurter
 - **Seismic activity** from USGS (M4+)
