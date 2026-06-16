@@ -1,6 +1,6 @@
-# WorldMonitor
+# World-Watch
 
-A standalone real-time global intelligence dashboard. Extracted from the Jarvis 2.0 project and rebuilt as a fully independent application.
+A standalone real-time global intelligence dashboard. Built as a fully independent application.
 
 ![Status](https://img.shields.io/badge/status-active-brightgreen) ![Port](https://img.shields.io/badge/port-9766-blue)
 

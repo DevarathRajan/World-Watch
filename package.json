@@ -1,0 +1,14 @@
+{
+  "name": "world-monitor",
+  "version": "1.0.0",
+  "description": "WorldMonitor — standalone intelligence dashboard",
+  "main": "main.js",
+  "scripts": {
+    "start":          "electron .",
+    "start:browser":  "python server.py --mode browser",
+    "start:electron": "python server.py --mode electron"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}
