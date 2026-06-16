@@ -58,7 +58,7 @@ Runs on `http://localhost:9766`.
 ## Project structure
 
 ```
-WorldMonitor/
+WorldWatch/
 ├── server.py        ← FastAPI backend + static serving
 ├── main.js          ← Electron entry point
 ├── package.json
