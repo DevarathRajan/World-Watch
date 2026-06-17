@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen } = require("electron");
+const { app, BrowserWindow, screen, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -35,6 +35,19 @@ app.whenReady().then(() => {
       backgroundColor: "#010508",
       webPreferences: { contextIsolation: true, nodeIntegration: false },
     });
+    // Keep everything inline. YouTube embeds (webcams/broadcast) try to pop a
+    // new window when clicked — deny that so they play in-app, and send any
+    // genuine external link to the system browser instead of a new app window.
+    win.webContents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+      return { action: "deny" };
+    });
+
+    // Adapt the dense dashboard to the screen resolution so it isn't
+    // microscopic on 4K or cramped on small laptops (baseline width = 1920).
+    const zoom = Math.max(0.8, Math.min(1.4, workAreaSize.width / 1920));
+    win.webContents.on("did-finish-load", () => win.webContents.setZoomFactor(zoom));
+
     win.loadURL(`http://localhost:${PORT}`);
     win.on("closed", () => { win = null; });
   }, delay);
