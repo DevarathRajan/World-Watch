@@ -272,6 +272,63 @@ const WM_GAZETTEER = {
 const WM_CONFLICT_RE = /\b(war|strike|attack|missile|killed|clash|troops|offensive|shelling|drone|airstrike|invasion|ceasefire|militant|rebel|frontline|casualties|bombard|siege|raid|gunmen|fighting)\b/i;
 const WM_NUCLEAR_RE  = /\b(nuclear|uranium|enrichment|iaea|reactor|atomic|warhead|plutonium|centrifuge)\b/i;
 
+// Major global data-center / cloud-region hubs — [lat, lon, city, note].
+// Reference data (locations are stable, not a live feed). Plotted as blue dots.
+const WM_DATACENTERS = [
+  // North America
+  [39.04, -77.49, "Ashburn, VA",     "US-East / largest hub"],
+  [37.37, -121.96,"Santa Clara, CA", "Silicon Valley"],
+  [32.78, -96.80, "Dallas, TX",      "Central US"],
+  [41.85, -87.65, "Chicago, IL",     "Midwest hub"],
+  [33.75, -84.39, "Atlanta, GA",     "Southeast hub"],
+  [45.60, -121.18,"The Dalles, OR",  "Hyperscale (Google)"],
+  [47.61, -122.33,"Seattle, WA",     "US-West / Azure"],
+  [33.45, -112.07,"Phoenix, AZ",     "Hyperscale growth"],
+  [40.71, -74.01, "New York, NY",    "NY metro"],
+  [43.65, -79.38, "Toronto, CA",     "Canada-Central"],
+  [45.50, -73.57, "Montreal, CA",    "Canada-East"],
+  [20.59, -100.39,"Querétaro, MX",   "Mexico region"],
+  // Europe
+  [51.51, -0.13,  "London, UK",      "FLAP-D hub"],
+  [50.11,  8.68,  "Frankfurt, DE",   "FLAP-D / DE-CIX"],
+  [52.37,  4.90,  "Amsterdam, NL",   "FLAP-D / AMS-IX"],
+  [48.86,  2.35,  "Paris, FR",       "FLAP-D hub"],
+  [53.35, -6.26,  "Dublin, IE",      "EU cloud hub"],
+  [43.30,  5.37,  "Marseille, FR",   "Subsea cable landing"],
+  [59.33, 18.06,  "Stockholm, SE",   "Nordic hub"],
+  [45.46,  9.19,  "Milan, IT",       "Italy region"],
+  [40.42, -3.70,  "Madrid, ES",      "Iberia region"],
+  [50.85,  4.35,  "Brussels, BE",    "EU hub"],
+  [47.37,  8.54,  "Zurich, CH",      "Swiss region"],
+  [52.52, 13.40,  "Berlin, DE",      "DE region"],
+  [55.75, 37.62,  "Moscow, RU",      "RU hub"],
+  // Middle East / Africa
+  [25.20, 55.27,  "Dubai, AE",       "MENA hub"],
+  [26.07, 50.55,  "Manama, BH",      "AWS Bahrain"],
+  [24.71, 46.68,  "Riyadh, SA",      "KSA region"],
+  [25.29, 51.53,  "Doha, QA",        "Qatar region"],
+  [32.09, 34.78,  "Tel Aviv, IL",    "Israel region"],
+  [-26.20,28.05,  "Johannesburg, ZA","Africa hub"],
+  [6.52,  3.38,   "Lagos, NG",       "West Africa"],
+  [-1.29, 36.82,  "Nairobi, KE",     "East Africa"],
+  // Asia-Pacific
+  [1.35, 103.82,  "Singapore",       "APAC hub"],
+  [35.69, 139.69, "Tokyo, JP",       "APAC-Northeast"],
+  [34.69, 135.50, "Osaka, JP",       "JP-West"],
+  [22.32, 114.17, "Hong Kong",       "APAC hub"],
+  [37.57, 126.98, "Seoul, KR",       "Korea region"],
+  [19.08, 72.88,  "Mumbai, IN",      "India hub"],
+  [13.08, 80.27,  "Chennai, IN",     "India-South"],
+  [-6.21, 106.85, "Jakarta, ID",     "Indonesia region"],
+  [13.76, 100.50, "Bangkok, TH",     "Thailand region"],
+  [-33.87,151.21, "Sydney, AU",      "Australia-East"],
+  [31.23, 121.47, "Shanghai, CN",    "China-East"],
+  [39.90, 116.40, "Beijing, CN",     "China-North"],
+  // South America
+  [-23.55,-46.63, "São Paulo, BR",   "LATAM hub"],
+  [-33.45,-70.67, "Santiago, CL",    "Chile region"],
+];
+
 async function jvBuildMapEvents(component) {
   if (!component) return;
   const [quakeData, fireData, newsData] = await Promise.all([
@@ -334,6 +391,17 @@ async function jvBuildMapEvents(component) {
         break;
       }
     }
+  });
+
+  // Data-center markers (blue dots). Reference locations — always shown (ageMin 0
+  // so they pass every time-range filter), toggle via the DATA CENTERS layer.
+  WM_DATACENTERS.forEach(dc => {
+    events.push({
+      id: id++, name: dc[2], lat: dc[0], lon: dc[1],
+      cat: "datacenter", layer: "datacenters", region: dc[2],
+      headline: `Data center hub · ${dc[3]}`,
+      ageMin: 0,
+    });
   });
 
   // Attach colour / shape / label
@@ -916,6 +984,7 @@ class Component extends DCLogic {
       seismic:    ["#ffe14d", "dot", "SEISMIC"],
       fire:       ["#ff7a1a", "dot", "WILDFIRE"],
       nuclear:    ["#b48cff", "tri", "NUCLEAR"],
+      datacenter: ["#3a8dff", "dot", "DATA CENTER"],
       monitoring: ["#ffe14d", "dot", "MONITORING"],
     };
 
@@ -926,10 +995,11 @@ class Component extends DCLogic {
 
     // Real-data layers only. Each event's `layer` must be one of these ids.
     this.layerDefs = [
-      { id: "conflict", label: "CONFLICT EVENTS", color: "#ff4658" },
-      { id: "seismic",  label: "SEISMIC M4.5+",   color: "#ffe14d" },
-      { id: "wildfire", label: "WILDFIRES",       color: "#ff7a1a" },
-      { id: "nuclear",  label: "NUCLEAR SIGNALS", color: "#b48cff" },
+      { id: "conflict",    label: "CONFLICT EVENTS", color: "#ff4658" },
+      { id: "seismic",     label: "SEISMIC M4.5+",   color: "#ffe14d" },
+      { id: "wildfire",    label: "WILDFIRES",       color: "#ff7a1a" },
+      { id: "nuclear",     label: "NUCLEAR SIGNALS", color: "#b48cff" },
+      { id: "datacenters", label: "DATA CENTERS",    color: "#3a8dff" },
     ];
 
     this.legendItems = [
@@ -938,6 +1008,7 @@ class Component extends DCLogic {
       { label: "Seismic",   color: "#ffe14d", radius: "50%" },
       { label: "Wildfire",  color: "#ff7a1a", radius: "50%" },
       { label: "Nuclear",   color: "#b48cff", radius: "1px" },
+      { label: "Data Center",color: "#3a8dff", radius: "50%" },
     ];
 
     // Colour per news category
@@ -1106,7 +1177,7 @@ class Component extends DCLogic {
       now:           Date.now(),
       vw:            typeof window !== "undefined" ? window.innerWidth : 1600,
       activeRange:   "7d",
-      activeLayers:  ["conflict","seismic","wildfire","nuclear"],
+      activeLayers:  ["conflict","seismic","wildfire","nuclear","datacenters"],
       activeSource:  "ALL",
       activeWebTab:  "ALL",
       activeIntel:   "MILITARY ACTIVITY",
