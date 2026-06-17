@@ -1030,6 +1030,7 @@ input, select, button {
   padding: 2px 5px;
   border-radius: 3px;
   background: rgba(4, 8, 13, 0.7);
+  pointer-events: none;   /* never block the player's controls */
 }
 
 .wm-cam-status-dot {
@@ -1045,6 +1046,15 @@ input, select, button {
   right: 0;
   padding: 6px 7px;
   background: linear-gradient(0deg, rgba(4, 8, 13, 0.92), transparent);
+  pointer-events: none;   /* clicks pass through to the YouTube controls */
+}
+
+/* Once a cam is actually playing, hide the label overlays so the player's
+   controls (volume, play/pause, fullscreen) are fully usable. The expand
+   button stays. */
+.wm-cam-tile:has(iframe.wm-cam-iframe) .wm-cam-info,
+.wm-cam-tile:has(iframe.wm-cam-iframe) .wm-cam-status-badge {
+  display: none;
 }
 
 .wm-cam-city {
