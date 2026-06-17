@@ -111,7 +111,7 @@ World Watch/
 
 - No API keys required for any currently wired data source
 - OpenSky Network has rate limits on anonymous access — flight radar may return empty during high-traffic periods
-- GDELT is blocked by UAE ISP — the events endpoint falls back to BBC RSS automatically. Must be available for other countries and might not faced GDELT feed issues.
+- GDELT is blocked by UAE ISP — the events endpoint falls back to BBC RSS automatically. Must be available for other countries and might not face GDELT feed issues.
 - YouTube video IDs for webcams go stale (this has been handled with scraper) might need manual updates in `webcamData` inside `world.js`
 
 ---
