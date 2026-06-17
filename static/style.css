@@ -956,12 +956,12 @@ input, select, button {
 .wm-webcam-grid {
   padding: 9px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 8px;
 }
 
 .wm-webcam-grid.big {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
 }
 
 .wm-cam-tile {
@@ -1064,6 +1064,97 @@ input, select, button {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+/* Per-tile expand button */
+.wm-cam-expand {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(74, 200, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(4, 10, 18, 0.72);
+  color: #9fe2ff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.wm-cam-expand:hover {
+  background: rgba(74, 200, 255, 0.25);
+  border-color: #45d6ff;
+}
+
+/* Expanded webcam modal */
+.wm-cam-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 5, 9, 0.86);
+  backdrop-filter: blur(3px);
+}
+
+.wm-cam-modal {
+  width: min(92vw, 1280px);
+  max-height: 90vh;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(74, 200, 255, 0.35);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #04070c;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 30px rgba(74, 200, 255, 0.12);
+}
+
+.wm-cam-modal-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(74, 200, 255, 0.06);
+  border-bottom: 1px solid rgba(74, 200, 255, 0.14);
+}
+
+.wm-cam-modal-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #cfeefc;
+  text-transform: uppercase;
+}
+
+.wm-cam-modal-close {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(74, 200, 255, 0.3);
+  border-radius: 5px;
+  background: transparent;
+  color: #9fe2ff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wm-cam-modal-close:hover {
+  background: rgba(255, 70, 88, 0.2);
+  border-color: #ff4658;
+  color: #fff;
+}
+
+.wm-cam-modal-iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  border: none;
+  background: #000;
 }
 
 /* ── Live Broadcast ───────────────────────────────────────── */

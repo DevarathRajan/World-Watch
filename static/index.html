@@ -179,7 +179,7 @@
                 <div class="wm-event-meta">
                   <span>{{ sel.region }}</span>
                   <span>{{ sel.coords }}</span>
-                  <span>{{ sel.rel }} AGO</span>
+                  <span>{{ sel.rel }}</span>
                 </div>
               </div>
             </div>
@@ -347,7 +347,7 @@
             <sc-for list="{{ webcamTiles }}" as="c" hint-placeholder-count="6">
               <div class="wm-cam-tile"
                 style="border:1px solid {{ c.bd }}"
-                onclick="{{ c.onClick }}">
+                onClick="{{ c.onClick }}">
 
                 <sc-if value="{{ c.loaded }}" hint-placeholder-val="{{ false }}">
                   <iframe class="wm-cam-iframe"
@@ -371,6 +371,12 @@
                   <span class="wm-cam-status-dot" style="background:{{ c.statusColor }}"></span>
                   {{ c.status }}
                 </div>
+
+                <sc-if value="{{ c.expandable }}" hint-placeholder-val="{{ true }}">
+                  <button class="wm-cam-expand" title="Expand"
+                    onClick="{{ c.onExpand }}">⤢</button>
+                </sc-if>
+
                 <div class="wm-cam-info">
                   <div class="wm-cam-city">{{ c.city }}</div>
                   <div class="wm-cam-note">{{ c.note }}</div>
@@ -379,6 +385,22 @@
               </div>
             </sc-for>
           </div>
+
+          <!-- Expanded webcam modal -->
+          <sc-if value="{{ hasWebcamModal }}" hint-placeholder-val="{{ false }}">
+            <div class="wm-cam-modal-overlay" onClick="{{ closeWebcamModal }}">
+              <div class="wm-cam-modal">
+                <div class="wm-cam-modal-bar">
+                  <span class="wm-cam-modal-title">{{ webcamModalCity }} · {{ webcamModalNote }}</span>
+                  <button class="wm-cam-modal-close" onClick="{{ closeWebcamModal }}">✕</button>
+                </div>
+                <iframe class="wm-cam-modal-iframe"
+                  src="{{ webcamModalSrc }}"
+                  allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                  allowfullscreen></iframe>
+              </div>
+            </div>
+          </sc-if>
         </section>
 
         <!-- LIVE BROADCAST -->

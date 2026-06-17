@@ -1187,6 +1187,7 @@ class Component extends DCLogic {
       activeChannel: "bloomberg",   // Bloomberg auto-plays (muted) on load
       newsBig:       false,
       webcamBig:     false,
+      webcamModal:   null,   // {city, note, ytId} when a cam is expanded full-size
       bcastBig:      false,
       risk:          13,
       riskTrend:     "STABLE",
@@ -1559,10 +1560,17 @@ class Component extends DCLogic {
         bd:         c[2] ? "rgba(62,224,143,.4)" : "rgba(74,200,255,.12)",
         bg:         c[2] ? "linear-gradient(135deg,#0a2230,#06131d)" : "linear-gradient(135deg,#0a1018,#06101a)",
         thumb:      ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : "",
-        iframeSrc:  ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=0&rel=0&modestbranding=1` : "",
+        // Inline tile autoplays muted (reliable in a tiny tile, no audio clash).
+        iframeSrc:  ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1` : "",
         loaded,
         notLoaded:  !loaded,
+        expandable: !!ytId,
         onClick:    ytId ? () => { this._loadedCams.add(ytId); this.forceUpdate(); } : () => {},
+        onExpand:   ytId ? (e) => {
+                      if (e && e.stopPropagation) e.stopPropagation();
+                      this._loadedCams.add(ytId);
+                      this.setState({ webcamModal: { city: c[0], note: c[1], ytId } });
+                    } : () => {},
       };
     });
 
@@ -1655,11 +1663,12 @@ class Component extends DCLogic {
         glow:   "rgba(74,200,255,.08)",
         coords: `${s.selectedEvent.lat.toFixed(1)}°, ${s.selectedEvent.lon.toFixed(1)}°`,
         rel:    (() => {
+          if (s.selectedEvent.cat === "datacenter") return "REFERENCE SITE";
           const m = s.selectedEvent.ageMin;
-          if (m < 60)  return m + "M";
+          if (m < 60)  return m + "M AGO";
           const h = m / 60;
-          if (h < 24)  return Math.floor(h) + "H";
-          return Math.floor(h / 24) + "D";
+          if (h < 24)  return Math.floor(h) + "H AGO";
+          return Math.floor(h / 24) + "D AGO";
         })(),
       } : {},
       closeEvent:   () => this.setState({ selectedEvent: null }),
@@ -1672,6 +1681,12 @@ class Component extends DCLogic {
       // Webcams
       webcamSpan, webcamBig, webcamSizeIcon, toggleWebcamSize: () => this.setState(x => ({ webcamBig: !x.webcamBig })),
       webTabs, webcamTiles,
+      hasWebcamModal:  !!s.webcamModal,
+      webcamModalCity: s.webcamModal ? s.webcamModal.city : "",
+      webcamModalNote: s.webcamModal ? s.webcamModal.note : "",
+      // Expanded view: opened by a click gesture, so autoplay with sound.
+      webcamModalSrc:  s.webcamModal ? `https://www.youtube-nocookie.com/embed/${s.webcamModal.ytId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1` : "",
+      closeWebcamModal: () => this.setState({ webcamModal: null }),
 
       // Broadcast
       bcastSpan, bcastSizeIcon, toggleBcastSize: () => this.setState(x => ({ bcastBig: !x.bcastBig })),
