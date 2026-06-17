@@ -1285,6 +1285,18 @@ class Component extends DCLogic {
     }
   }
 
+  // Mute / unmute every live YouTube embed (webcams, expanded modal, broadcast)
+  // via the IFrame postMessage API. Driven by the header mute button. Does not
+  // reload any player, so it never disrupts a stream that's already running —
+  // including Bloomberg's muted autoplay on start.
+  applyMute(mute) {
+    if (typeof document === "undefined") return;
+    const msg = JSON.stringify({ event: "command", func: mute ? "mute" : "unMute", args: [] });
+    document
+      .querySelectorAll("iframe.wm-cam-iframe, iframe.wm-cam-modal-iframe, iframe.wm-broadcast-iframe")
+      .forEach(f => { try { f.contentWindow && f.contentWindow.postMessage(msg, "*"); } catch (e) {} });
+  }
+
   // Pull fresh, auto-scraped webcam IDs from the server so they never go stale.
   async fetchWebcams() {
     const data = await wmFetch("webcams");
@@ -1560,16 +1572,21 @@ class Component extends DCLogic {
         bd:         c[2] ? "rgba(62,224,143,.4)" : "rgba(74,200,255,.12)",
         bg:         c[2] ? "linear-gradient(135deg,#0a2230,#06131d)" : "linear-gradient(135deg,#0a1018,#06101a)",
         thumb:      ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : "",
-        // Inline tile autoplays muted (reliable in a tiny tile, no audio clash).
-        iframeSrc:  ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1` : "",
+        // Clicking a tile is a user gesture, so play WITH sound. enablejsapi=1
+        // lets the header mute button control it via postMessage.
+        iframeSrc:  ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=0&enablejsapi=1&rel=0&modestbranding=1&playsinline=1` : "",
         loaded,
         notLoaded:  !loaded,
         expandable: !!ytId,
-        onClick:    ytId ? () => { this._loadedCams.add(ytId); this.forceUpdate(); } : () => {},
+        onClick:    ytId ? () => {
+                      this._loadedCams.add(ytId); this.forceUpdate();
+                      if (this.state.muted) setTimeout(() => this.applyMute(true), 1500);
+                    } : () => {},
         onExpand:   ytId ? (e) => {
                       if (e && e.stopPropagation) e.stopPropagation();
                       this._loadedCams.add(ytId);
-                      this.setState({ webcamModal: { city: c[0], note: c[1], ytId } });
+                      this.setState({ webcamModal: { city: c[0], note: c[1], ytId } },
+                        () => { if (this.state.muted) setTimeout(() => this.applyMute(true), 1500); });
                     } : () => {},
       };
     });
@@ -1632,7 +1649,7 @@ class Component extends DCLogic {
     const autoMuted    = !this._bcastInteracted && s.activeChannel === "bloomberg";
     const chMute       = autoMuted ? 1 : 0;
     const channelSrc   = channelVid
-      ? `https://www.youtube-nocookie.com/embed/${channelVid}?autoplay=1&mute=${chMute}&rel=0&modestbranding=1&playsinline=1`
+      ? `https://www.youtube-nocookie.com/embed/${channelVid}?autoplay=1&mute=${chMute}&enablejsapi=1&rel=0&modestbranding=1&playsinline=1`
       : "";
 
     // Panel expand toggles
@@ -1653,7 +1670,8 @@ class Component extends DCLogic {
       onRegion: e => this.setState({ activeRegion: e.target.value }),
       alertsCount: this.events.filter(e => e.cat === "high").length,
       eventsCount: this.events.length,
-      muted: s.muted, muteIcon: s.muted ? "🔇" : "🔊", toggleMute: () => this.setState(x => ({ muted: !x.muted })),
+      muted: s.muted, muteIcon: s.muted ? "🔇" : "🔊",
+      toggleMute: () => this.setState(x => ({ muted: !x.muted }), () => this.applyMute(this.state.muted)),
       rangeTabs, zoomIn: () => this.zoomIn(), zoomOut: () => this.zoomOut(), zoomReset: () => this.zoomReset(),
       layerList, activeLayerCount: s.activeLayers.length, layerTotal: this.layerDefs.length,
       legendItems: this.legendItems, mapLoading: !s.mapReady && !s.mapError, mapError: s.mapError,
@@ -1685,7 +1703,7 @@ class Component extends DCLogic {
       webcamModalCity: s.webcamModal ? s.webcamModal.city : "",
       webcamModalNote: s.webcamModal ? s.webcamModal.note : "",
       // Expanded view: opened by a click gesture, so autoplay with sound.
-      webcamModalSrc:  s.webcamModal ? `https://www.youtube-nocookie.com/embed/${s.webcamModal.ytId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1` : "",
+      webcamModalSrc:  s.webcamModal ? `https://www.youtube-nocookie.com/embed/${s.webcamModal.ytId}?autoplay=1&mute=0&enablejsapi=1&rel=0&modestbranding=1&playsinline=1` : "",
       closeWebcamModal: () => this.setState({ webcamModal: null }),
 
       // Broadcast

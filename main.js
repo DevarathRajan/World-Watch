@@ -43,10 +43,12 @@ app.whenReady().then(() => {
       return { action: "deny" };
     });
 
-    // Adapt the dense dashboard to the screen resolution so it isn't
-    // microscopic on 4K or cramped on small laptops (baseline width = 1920).
-    const zoom = Math.max(0.8, Math.min(1.4, workAreaSize.width / 1920));
-    win.webContents.on("did-finish-load", () => win.webContents.setZoomFactor(zoom));
+    // Render at 100%. Chromium persists zoom per-host, so explicitly reset it
+    // on every load to undo any zoom left over from a previous build.
+    win.webContents.on("did-finish-load", () => {
+      win.webContents.setZoomFactor(1.0);
+      win.webContents.setVisualZoomLevelLimits(1, 1);
+    });
 
     win.loadURL(`http://localhost:${PORT}`);
     win.on("closed", () => { win = null; });
