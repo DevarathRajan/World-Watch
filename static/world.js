@@ -329,6 +329,42 @@ const WM_DATACENTERS = [
   [-33.45,-70.67, "Santiago, CL",    "Chile region"],
 ];
 
+// Major subsea oil/gas pipelines — drawn as connected lines on the map.
+// Curated reference data (real, public, named pipelines); no free real-time
+// global pipeline feed exists. coords are [lat, lon] waypoints along the route.
+const WM_PIPELINES = [
+  { name: "Nord Stream 1",  region: "Baltic Sea", note: "Vyborg (RU) → Greifswald (DE)",
+    coords: [[60.70,28.75],[59.40,23.00],[56.10,16.50],[54.95,13.80],[54.14,13.62]] },
+  { name: "Nord Stream 2",  region: "Baltic Sea", note: "Ust-Luga (RU) → Greifswald (DE)",
+    coords: [[59.65,28.20],[57.40,20.00],[55.10,14.60],[54.14,13.62]] },
+  { name: "TurkStream",     region: "Black Sea",  note: "Anapa (RU) → Kıyıköy (TR)",
+    coords: [[44.90,37.35],[43.20,33.00],[41.95,29.20],[41.63,28.10]] },
+  { name: "Blue Stream",    region: "Black Sea",  note: "Beregovaya (RU) → Samsun (TR)",
+    coords: [[44.88,37.30],[42.50,35.50],[41.30,36.33]] },
+  { name: "Trans-Mediterranean", region: "Strait of Sicily", note: "Cap Bon (TN) → Mazara del Vallo (IT)",
+    coords: [[37.05,11.03],[37.30,11.80],[37.65,12.59]] },
+  { name: "Maghreb–Europe", region: "Strait of Gibraltar", note: "Tangier (MA) → Tarifa (ES)",
+    coords: [[35.78,-5.81],[35.95,-5.60],[36.01,-5.61]] },
+  { name: "Medgaz",         region: "Alboran Sea", note: "Beni Saf (DZ) → Almería (ES)",
+    coords: [[35.32,-1.38],[36.10,-2.10],[36.83,-2.46]] },
+  { name: "GreenStream",    region: "Mediterranean", note: "Mellitah (LY) → Gela (IT)",
+    coords: [[33.25,11.50],[35.20,12.80],[37.07,14.25]] },
+  { name: "Trans-Adriatic (TAP)", region: "Adriatic Sea", note: "Fier (AL) → San Foca (IT)",
+    coords: [[40.72,19.30],[40.55,18.90],[40.35,18.43]] },
+  { name: "Langeled",       region: "North Sea",  note: "Nyhamna (NO) → Easington (UK)",
+    coords: [[62.60,6.50],[60.00,3.50],[56.00,1.50],[53.65,0.10]] },
+  { name: "Norpipe",        region: "North Sea",  note: "Ekofisk → Emden (DE)",
+    coords: [[56.55,3.21],[55.00,5.20],[53.36,7.20]] },
+  { name: "Franpipe",       region: "North Sea",  note: "Draupner (NO) → Dunkerque (FR)",
+    coords: [[58.20,2.50],[55.00,2.50],[51.05,2.37]] },
+  { name: "BBL Pipeline",   region: "North Sea",  note: "Balgzand (NL) → Bacton (UK)",
+    coords: [[52.92,4.80],[52.88,3.00],[52.85,1.46]] },
+  { name: "Interconnector", region: "North Sea",  note: "Bacton (UK) → Zeebrugge (BE)",
+    coords: [[52.85,1.46],[52.10,2.50],[51.35,3.20]] },
+  { name: "Dolphin Gas",    region: "Persian Gulf", note: "Ras Laffan (QA) → Taweelah (UAE)",
+    coords: [[25.92,51.60],[25.40,52.60],[24.78,54.68]] },
+];
+
 async function jvBuildMapEvents(component) {
   if (!component) return;
   const [quakeData, fireData, newsData] = await Promise.all([
@@ -1000,6 +1036,7 @@ class Component extends DCLogic {
       { id: "wildfire",    label: "WILDFIRES",       color: "#ff7a1a" },
       { id: "nuclear",     label: "NUCLEAR SIGNALS", color: "#b48cff" },
       { id: "datacenters", label: "DATA CENTERS",    color: "#3a8dff" },
+      { id: "pipelines",   label: "SUBSEA PIPELINES",color: "#37e0c4" },
     ];
 
     this.legendItems = [
@@ -1009,6 +1046,7 @@ class Component extends DCLogic {
       { label: "Wildfire",  color: "#ff7a1a", radius: "50%" },
       { label: "Nuclear",   color: "#b48cff", radius: "1px" },
       { label: "Data Center",color: "#3a8dff", radius: "50%" },
+      { label: "Subsea Pipeline", color: "#37e0c4", radius: "1px" },
     ];
 
     // Colour per news category
@@ -1177,7 +1215,7 @@ class Component extends DCLogic {
       now:           Date.now(),
       vw:            typeof window !== "undefined" ? window.innerWidth : 1600,
       activeRange:   "7d",
-      activeLayers:  ["conflict","seismic","wildfire","nuclear","datacenters"],
+      activeLayers:  ["conflict","seismic","wildfire","nuclear","datacenters","pipelines"],
       activeSource:  "ALL",
       activeWebTab:  "ALL",
       activeIntel:   "MILITARY ACTIVITY",
@@ -1416,6 +1454,7 @@ class Component extends DCLogic {
       .on("mouseover", function() { d3.select(this).attr("fill", "#15324a"); })
       .on("mouseout",  function() { d3.select(this).attr("fill", "#0c1a28"); });
 
+    this.pipesG   = g.append("g");   // subsea pipelines (under markers)
     this.markersG = g.append("g");
     this.svg      = svg;
     this.proj     = proj;
@@ -1427,7 +1466,67 @@ class Component extends DCLogic {
     svg.call(this.zoomBehav).on("dblclick.zoom", null);
     svg.on("click", () => this.setState({ selectedEvent: null }));
 
+    this.updatePipelines();
     this.updateMarkers();
+  }
+
+  // Draw subsea pipelines as connected lines projected onto the map. Lines live
+  // inside the zoom group so they pan/scale with it; non-scaling-stroke keeps
+  // the line weight constant at any zoom level.
+  updatePipelines() {
+    const d3 = this.d3;
+    if (!this.pipesG || !this.proj || !d3) return;
+
+    this.pipesG.selectAll("*").remove();
+    if (!this.state.activeLayers.includes("pipelines")) return;
+
+    const path = d3.geoPath(this.proj);
+    const self = this;
+
+    WM_PIPELINES.forEach(pl => {
+      const feature = { type: "Feature",
+        geometry: { type: "LineString", coordinates: pl.coords.map(c => [c[1], c[0]]) } };
+      const d = path(feature);
+      if (!d) return;
+
+      // Wide soft glow underlay so the connection reads even when short
+      this.pipesG.append("path").attr("d", d)
+        .attr("fill", "none").attr("stroke", pl.color)
+        .attr("stroke-width", 5).attr("stroke-opacity", 0.22)
+        .attr("stroke-linecap", "round").attr("stroke-linejoin", "round")
+        .attr("vector-effect", "non-scaling-stroke")
+        .style("pointer-events", "none");
+
+      // Solid bright pipeline line — the visible connection (clickable)
+      this.pipesG.append("path").attr("d", d)
+        .attr("fill", "none").attr("stroke", pl.color)
+        .attr("stroke-width", 2).attr("stroke-opacity", 0.98)
+        .attr("stroke-linecap", "round").attr("stroke-linejoin", "round")
+        .attr("vector-effect", "non-scaling-stroke")
+        .style("cursor", "pointer")
+        .on("click", ev => { ev.stopPropagation(); self.setState({ selectedEvent: {
+            name: pl.name, cat: "pipeline", catLabel: "SUBSEA PIPELINE", color: pl.color,
+            headline: pl.note, region: pl.region,
+            lat: pl.coords[0][0], lon: pl.coords[0][1], ageMin: 0,
+          } }); })
+        .append("title").text(`${pl.name} — ${pl.note}`);
+
+      // Thin white flow dashes on top for a "pipeline" feel
+      this.pipesG.append("path").attr("d", d)
+        .attr("fill", "none").attr("stroke", "rgba(255,255,255,.85)")
+        .attr("stroke-width", 0.7).attr("stroke-dasharray", "2 6")
+        .attr("vector-effect", "non-scaling-stroke")
+        .style("pointer-events", "none");
+
+      // Endpoint nodes (slightly larger, ringed)
+      [pl.coords[0], pl.coords[pl.coords.length - 1]].forEach(c => {
+        const p = self.proj([c[1], c[0]]);
+        if (!p) return;
+        self.pipesG.append("circle").attr("cx", p[0]).attr("cy", p[1]).attr("r", 2.6)
+          .attr("fill", pl.color).attr("stroke", "rgba(255,255,255,.7)").attr("stroke-width", 0.6)
+          .attr("vector-effect", "non-scaling-stroke").style("pointer-events", "none");
+      });
+    });
   }
 
   updateMarkers() {
@@ -1484,7 +1583,7 @@ class Component extends DCLogic {
       const a = new Set(s.activeLayers);
       a.has(id) ? a.delete(id) : a.add(id);
       return { activeLayers: [...a] };
-    }, () => this.updateMarkers());
+    }, () => { this.updatePipelines(); this.updateMarkers(); });
   }
   zoomIn()    { if (this.svg) this.svg.transition().duration(280).call(this.zoomBehav.scaleBy,  1.6); }
   zoomOut()   { if (this.svg) this.svg.transition().duration(280).call(this.zoomBehav.scaleBy, 1/1.6); }
@@ -1681,6 +1780,7 @@ class Component extends DCLogic {
         glow:   "rgba(74,200,255,.08)",
         coords: `${s.selectedEvent.lat.toFixed(1)}°, ${s.selectedEvent.lon.toFixed(1)}°`,
         rel:    (() => {
+          if (s.selectedEvent.cat === "pipeline")   return "SUBSEA INFRASTRUCTURE";
           if (s.selectedEvent.cat === "datacenter") return "REFERENCE SITE";
           const m = s.selectedEvent.ageMin;
           if (m < 60)  return m + "M AGO";
